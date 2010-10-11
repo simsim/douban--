@@ -1,0 +1,418 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"> 
+<html xmlns="http://www.w3.org/1999/xhtml"> 
+<head> 
+    <title>脱脂豆瓣</title> 
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta content="提供图书、电影、音乐唱片的推荐、评论。" name="description"/> 
+ 
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+    <link href="http://img3.douban.com/css/packed_douban7.css" rel="stylesheet" type="text/css" /> 
+    <link href="http://img3.douban.com/css/separation/packed__all2.css" rel="stylesheet" type="text/css" /> 
+
+<style type="text/css" media="screen">
+.dbl-logo-badge {
+	position:absolute;
+	width: 50px;
+	top:-5px;
+	left:118px;
+	color: #03AC5C;
+}
+.top-nav a, .site-nav-items a { text-decoration: line-through;}
+</style>
+
+<script type="text/javascript">
+function getUserID() {
+	var userID = location.search.match(/\?id=(.+)/);
+	if(userID){
+		//now we have the raw id string
+		//it can be the id or a user url.
+		userID = unescape(userID[1]);
+		var extract = userID.match(/http:\/\/www.douban.com\/people\/(.+)\//);
+		if(extract){
+			userID = extract[1];
+		}
+	}
+	return userID;
+}
+
+function loadJSON() {
+	data_url = "http://api.douban.com/people/" + dbl.uid + "/miniblog/contacts?start-index="+ (dbl.totalcount + 1) +"&max-results="+ dbl.pagesize +"&alt=xd";
+	$.ajax({
+		url: data_url,
+		dataType: 'jsonp',
+		//jsonpCallback: 'lp_jsonp',
+		// TODO: Dunno why error event never fires.
+		error: function() {
+			$(document).ready(function(){
+				alert("读取数据出错！");
+			});
+		},
+		success: function(data) {
+			$(document).ready(function(){
+				appendEntries(data);
+			});
+		}
+		
+	});	
+}
+
+function getEntryDBAttr(attr, entry){
+	for(var i in entry["db:attribute"]){
+		if(entry["db:attribute"][i]["@name"] == attr){
+			return entry["db:attribute"][i].$t;
+		}
+	}
+	return null;
+}
+
+function getEntryImage(entry){
+	for(var i in entry.link){
+		if(entry.link[i]["@rel"] == 'image'){
+			return entry.link[i]["@href"];
+		}
+	}
+	return null;
+}
+
+function appendEntries(data) {
+	$("#content h1").html("你好，"+data.author.name.$t);
+	
+	var lastauthor = "";
+	for(var i in data.entry){
+		if(getEntryDBAttr('category', data.entry[i]) in dbl.filters){
+			//console.debug(i);
+			
+			var entry = {'author':{}, 'content': '', 'image': '', 'rating': ''};
+			
+			entry.author.name = data.entry[i].author.name.$t;
+			entry.author.link = data.entry[i].author.link[1]["@href"];
+			entry.author.icon = data.entry[i].author.link[2]["@href"];
+			entry.content = data.entry[i].content.$t;
+			entry.image = getEntryImage(data.entry[i]);
+			entry.rating = getEntryDBAttr('rating', data.entry[i]);
+			entry.comment = getEntryDBAttr('comment', data.entry[i]);
+			
+			var str = '<li class="mbtl">';
+			if(lastauthor != entry.author.link){
+				str += '<a href="'+ entry.author.link +'"><img src="'+ entry.author.icon +'" alt="'+ entry.author.name +'" title="'+ entry.author.name +'"/></a>';
+			}
+			str += '</li><li class="mbtr">';
+			str += '<span class="starb"><a href="'+ entry.author.link +'">'+ entry.author.name +'</a><span class="pl">'+ entry.content +'</span> &nbsp;</span>';
+			if(entry.rating){
+				str += '<span class="stars'+ entry.rating +' stars" title="'+ dbl.ratingnames[entry.rating * 1] +'"></span>';
+			}
+			if(entry.image){
+				var tmp = entry.content.match(/.+<a href="(.+)">(.+)<\/a>/);
+				entry.link = tmp[1];
+				entry.title = tmp[2];
+				str += '<a title="'+ entry.title +'" href="'+ entry.link +'"><img class="broadimg" src="'+ entry.image +'" alt="'+ entry.title +'"/></a>';
+			}
+			str += '<br/>';
+			if(entry.comment){
+				str += '<div class="quote"><span class="inq">'+ entry.comment+'</span></div>';
+			}
+			str += '</li>';
+			$(".mbt").append(str);
+			lastauthor = entry.author.link;
+			dbl.passcount += 1;
+		}
+		
+	}
+	dbl.totalcount += dbl.pagesize;
+	var fatrate = Math.floor((dbl.totalcount - dbl.passcount) * 1.0 / dbl.totalcount * 100);
+	$("#dbl-percent").html(fatrate);
+	
+	var comment = "";
+	if(fatrate >= 75){
+		comment = "<br />"+ fatrate +"%？！有冇搞错？你的友邻一天到晚都在BB些神马乱七八糟的玩意儿啊？！//扶额";
+	} else if(fatrate >= 50) {
+		comment = "";
+	} else if(fatrate >= 25) {
+		comment = "";
+	} else {
+		comment = "<br />赞！只有" + fatrate + "%的脂肪。你的友邻们看起来已经自我脱脂了。";
+	}
+	
+	$("#dbl-comment").html(comment);
+	
+	$("#dbl-morelink").html("猛击这里继续脱！");
+	dbl.loading = false;
+	
+	$("#miniblog").show();
+	$("#dbl-stats").show();
+
+}
+
+var dbl = {};
+dbl.pagesize = 50;
+dbl.passcount = 0;
+dbl.totalcount = 0;
+dbl.uid = getUserID();
+dbl.username = "";
+dbl.filters = {'collection':'', 'review':'', 'discussion':'', 'book':'', 'magazine':'', 'movie':'', 'music':'', 'tv':'', 'doulist':''}
+dbl.ratingnames = ['', '很差', '较差', '还行', '推荐', '力荐'];
+
+$("#dbl-morelink").live("click", function(){
+	if(!dbl.loading){
+		dbl.loading = true;
+		$(this).html("请稍候⋯⋯");
+		loadJSON();
+	}
+	return false;
+});
+
+if(dbl.uid){
+	$(document).ready(function(){
+		$("#content h1").html("请稍候⋯⋯").show();
+	});
+	loadJSON();
+} else {
+	$(document).ready(function(){
+		$("#content h1").html("你好！请坐！").show();
+		$("#dbl-login").show();
+	});
+}
+
+</script>
+
+</head> 
+<body> 
+    
+    
+ 
+<div class="top-nav"> 
+  <div class="bd"> 
+<div class="top-nav-info">
+	<a href="http://www.douban.com/doumail/">豆邮</a> 
+    <a target="_blank" href="http://www.douban.com/accounts/">你的帐号</a> 
+    <a href="http://www.douban.com/accounts/logout">退出</a> 
+</div> 
+ 
+ 
+    <div class="top-nav-items"> 
+        <ul> 
+                <li> 
+                  <a href="http://www.douban.com/">豆瓣社区</a> 
+                </li>
+                
+                <li> 
+                  <a href="http://book.douban.com/">豆瓣读书</a> 
+                </li> 
+                
+                <li> 
+                  <a href="http://movie.douban.com/">豆瓣电影</a> 
+                </li> 
+                
+                <li> 
+                  <a href="http://music.douban.com/">豆瓣音乐</a> 
+                </li> 
+                
+                <li> 
+                  <a href="http://9.douban.com/" target="_blank">九点</a> 
+                </li> 
+                
+                <li> 
+                  <a href="http://douban.fm/" target="_blank">豆瓣电台</a> 
+                </li> 
+        </ul> 
+    </div> 
+  </div> 
+</div> 
+ 
+ 
+<div id="wrapper"> 
+        
+<div id="header"> 
+ 
+<div id="db-nav-main" class="site-nav"> 
+    <div class="site-nav-logo"> 
+      <a href="http://www.douban.com"> 
+       <img src="http://img3.douban.com/pics/nav/lg_main_a6.png" alt="豆瓣"> 
+       <em>首页</em> 
+      </a>
+      <div class="dbl-logo-badge">脱脂版</div>
+    </div> 
+ 
+    <div class="bd"> 
+    <div class="nav-srh">
+    </div> 
+ 
+    <div class="site-nav-items"> 
+        <ul> 
+                
+                    <li><a href="http://www.douban.com">回正牌全脂豆瓣首页</a></li> 
+                
+                    <li><a href="http://www.douban.com/mine/">你的豆瓣</a></li> 
+                
+                    <li><a href="http://www.douban.com/group/">你的小组</a></li> 
+                
+                    <li><a href="http://www.douban.com/event/">同城</a></li> 
+                
+                    <li><a href="http://www.douban.com/explore/">浏览发现</a></li> 
+        </ul> 
+    </div> 
+    </div> 
+</div> 
+ 
+</div> 
+ 
+        
+    <div id="content"> 
+    
+    <h1 style="display:none;">欢迎！请坐！</h1> 
+ 
+    <div class="grid-16-8 clearfix"> 
+        <div class="article">
+        
+    <div id="dbl-login" style="display:none;">
+    	越办越像校内/淫淫网的豆瓣让你不爽？<br />不想在首页看到友邻影音书以外的讯息？<br /><br />
+    	请沐浴更衣薰香之后，在下面输入你的豆瓣用户名或者豆瓣地址，让蜀黍来帮你的豆瓣首页“脱脂”。临床实验证明绝无毒副作用。（亦无丰胸效果，sorry。）<br /><br />
+    			<form name="dbl-idform" method="get" action="">
+    			<input type="text" name="id" value="" size="50"/> <input class="bn-cta" type="submit" value="脱！" /> 
+    			</form><br />
+    			填写范例：ahbei，或者：http://www.douban.com/people/ahbei/<br />
+    			完全搞不清楚状况的同学请在正牌豆瓣登录后点<a href="http://www.douban.com/mine/">这里</a>，然后复制浏览器地址栏里的地址。<br /><br />
+    			注意一：“豆瓣用户名”并不是你三十天能改一次的“豆瓣名号”。不明白请猛击<a href="http://www.douban.com/help/account#t0-q0">这里</a>。<br />
+    			注意二：因为本作者很懒，压根就没有写一行处理错误的代码，所以请自行检查上述输入的用户名的准确性。如果输入错误或不存在的用户名，世界末日将从2012年提前到明天！没错，明天！
+    			<br /><br /><br /><br />
+    			
+    	<div>
+    		<h2>部分用户感言 &nbsp; &middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;</h2>
+    		
+    		George W. Bushit（国际友人）：<br />“豆瓣掺了金坷垃，一站能顶两站耍。非洲网络不发达，我们都要支援他。自从用了脱脂版，再不用上痘瓣啦。”<br /><br />
+    		林弥尧可（日美混血小学生）：<br />
+    		“脱脂豆瓣 SO EASY！哪里有料点哪里。妈妈再也不担心我跟友邻开房去。”<br /><br />
+    		冯巩俐（国际巨猩）：<br />
+    		“你，（//pause）值得拥有！”
+    		
+    		
+    		
+    	</div>
+    </div>
+    
+    
+    <div id="miniblog" style="display:none;">
+ 
+<div id="db-timeline-hd" class="clearfix"> 
+    <ul class="menu-list"> 
+        
+        
+        <li class="on"> 
+                <a href="">友邻的影音书</a> 
+        </li>
+    </ul> 
+</div> 
+ 
+<ul class="mbt">
+	
+</ul>
+    
+    
+    <ul>
+        <div class="paginator"> 
+            <a id="dbl-morelink" href="#">猛击这里继续脱！</a>
+        </div>
+ 
+</ul> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+    </div> 
+</div> 
+
+<div class="aside">
+
+<div id="dbl-stats" style="display:none;">
+	<h2>为了您的健康 &nbsp; &middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;</h2>
+	<div class="infobox">
+		怪蜀黍帮你脱掉了<span id="dbl-percent">0</span>%的豆瓣脂肪。<br />
+		<div id="dbl-comment"></div><br />
+		&gt;&gt; <a href="./douban--.html">我要换其他马甲！</a>
+	</div>
+</div>
+
+<div>
+	<h2>说明给你看 &nbsp; &middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;&middot;&nbsp;</h2>
+	<div class="infobox"> 
+    	<div class="ex1"><span></span></div> 
+    	<div class="bd">
+    		<div class="pl">
+    			这个页面跟豆瓣官方一毛钱关系都没有。看起来长得很像完全是因为我无齿地盗链了豆瓣的CSS（木哈哈）。谢绝阿北集团的跨国追捕。<div class="ul" style="margin-top:4px;margin-bottom:4px"></div>敬请消费者放心，本脱脂工艺采用三鹿、圣元联合开发的最新技术，并经ISO1069权威认证，人畜无害，绝不要求输入密码、电话、三围等个人信息。
+    			<div class="ul" style="margin-top:4px;margin-bottom:4px"></div>
+    			用本工具偷窥正妹友邻的人请自行面壁！代表月亮谴责你！
+    			<div class="ul" style="margin-top:4px;margin-bottom:4px"></div>
+    			坊间传说：如果系统检测到你或你的BF长得比我还帅，访问本页面时背景会自动变成粉红色。
+    		</div>
+    	</div> 
+     	<div class="ex2"><span></span></div> 
+    </div>
+</div> 
+
+        <div class="extra"> 
+            
+        </div> 
+    </div> 
+    </div> 
+ 
+        
+    <div id="footer"> 
+        
+ 
+<span id="icp" class="fleft gray-link">
+	&copy; 2005－2010 douban.com, all rights reserved.<br />
+    &copy; 2010 Sim, no right reserved.
+  <br />
+  就不备案！备你妹的案！
+</span> 
+ 
+<span class="fright"> 
+    <a href="http://www.douban.com/about">关于豆瓣</a> 
+    · <a href="http://www.douban.com/about?topic=teamup">在豆瓣工作</a> 
+    · <a href="http://www.douban.com/about?topic=contactus">联系我们</a> 
+    · <a href="http://www.douban.com/about?policy=disclaimer">免责声明</a> 
+    · <a href="http://www.douban.com/help/">帮助中心</a> 
+    · <a href="http://www.douban.com/service/">API</a> 
+    · <a href="http://www.douban.com/mobile/">手机豆瓣</a> 
+    · <a href="http://www.douban.com/partner/">品牌俱乐部</a> 
+</span> 
+ 
+    </div> 
+ 
+    </div> 
+</body> 
+</html> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
